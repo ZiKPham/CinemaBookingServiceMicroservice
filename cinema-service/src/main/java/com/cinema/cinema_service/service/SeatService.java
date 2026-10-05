@@ -1,11 +1,18 @@
 package com.cinema.cinema_service.service;
 
+import com.cinema.cinema_service.client.ShowtimeClient;
+import com.cinema.cinema_service.client.UserClient;
 import com.cinema.cinema_service.domain.Room;
 import com.cinema.cinema_service.domain.Seat;
 import com.cinema.cinema_service.domain.request.ReqCreateSeatDTO;
+import com.cinema.cinema_service.domain.request.ReqHoldSeatDTO;
 import com.cinema.cinema_service.domain.request.ReqUpdateSeatDTO;
 import com.cinema.cinema_service.domain.request.SeatSearchCriteria;
+import com.cinema.cinema_service.domain.response.ResHoldSeatDTO;
 import com.cinema.cinema_service.domain.response.ResSeatDTO;
+import com.cinema.cinema_service.domain.response.ResShowtimeDTO;
+import com.cinema.cinema_service.domain.response.RestResponse;
+import com.cinema.cinema_service.domain.response.ResUserDTO;
 import com.cinema.cinema_service.domain.response.ResultPaginationDTO;
 import com.cinema.cinema_service.repository.RoomRepository;
 import com.cinema.cinema_service.repository.SeatRepository;
@@ -19,6 +26,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -29,11 +37,71 @@ public class SeatService {
     private final SeatRepository seatRepository;
     private final SeatLockService seatLockService;
     private final RoomRepository roomRepository;
+    private final UserClient userClient;
+    private final ShowtimeClient showtimeClient;
 
-    public SeatService(SeatRepository seatRepository, SeatLockService seatLockService, RoomRepository roomRepository) {
+    public SeatService(SeatRepository seatRepository, SeatLockService seatLockService, RoomRepository roomRepository,
+            UserClient userClient, ShowtimeClient showtimeClient) {
         this.seatRepository = seatRepository;
         this.seatLockService = seatLockService;
         this.roomRepository = roomRepository;
+        this.userClient = userClient;
+        this.showtimeClient = showtimeClient;
+    }
+
+    public ResHoldSeatDTO handleHoldSeats(ReqHoldSeatDTO req, String userEmail) throws IdInvalidException {
+        if (userEmail == null || userEmail.trim().isEmpty()) {
+            throw new IdInvalidException("Xác thực người dùng không hợp lệ hoặc thiếu thông tin email");
+        }
+
+        ResUserDTO userDTO = userClient.getUserByEmail(userEmail);
+        if (userDTO == null) {
+            throw new IdInvalidException("Không tìm thấy thông tin người dùng trên hệ thống");
+        }
+
+        if (req.getSeatIds() == null || req.getSeatIds().isEmpty()) {
+            throw new IdInvalidException("Phải chọn ít nhất một ghế để giữ!");
+        }
+        if (req.getSeatIds().stream().anyMatch(seatId -> seatId == null)) {
+            throw new IdInvalidException("Danh sách ghế không được chứa ID rỗng!");
+        }
+
+        RestResponse<ResShowtimeDTO> showtimeResponse = showtimeClient.getShowtimeById(req.getShowtimeId());
+        ResShowtimeDTO showtimeDTO = showtimeResponse == null ? null : showtimeResponse.getData();
+        if (showtimeDTO == null) {
+            throw new IdInvalidException("Suất chiếu với id = " + req.getShowtimeId() + " không tồn tại");
+        }
+
+        Long roomOfShowtimeId = showtimeDTO.getRoom() == null ? null : showtimeDTO.getRoom().getId();
+        if (roomOfShowtimeId == null) {
+            throw new IdInvalidException("Suất chiếu này chưa được gán phòng chiếu cụ thể!");
+        }
+
+        List<Seat> seatsToLock = new ArrayList<>();
+        for (Long seatId : req.getSeatIds()) {
+            Seat seat = seatRepository.findById(seatId)
+                    .orElseThrow(() -> new IdInvalidException("Ghế với id = " + seatId + " không tồn tại"));
+
+            if (seat.getRoom() == null || !roomOfShowtimeId.equals(seat.getRoom().getId())) {
+                throw new IdInvalidException("Ghế có ID " + seatId + " không thuộc phòng chiếu của suất chiếu này!");
+            }
+            seatsToLock.add(seat);
+        }
+
+        List<Long> lockedSeatIds = new ArrayList<>();
+        for (Seat seat : seatsToLock) {
+            Long seatId = seat.getId();
+            boolean success = seatLockService.lockSeat(req.getShowtimeId(), seatId, userEmail);
+            if (!success) {
+                lockedSeatIds.forEach(lockedSeatId -> seatLockService.unlockSeat(req.getShowtimeId(), lockedSeatId));
+                throw new IdInvalidException("Ghế có ID " + seatId + " đang được giữ hoặc đã có người chọn!");
+            }
+            lockedSeatIds.add(seatId);
+        }
+
+        Instant expiresAt = seatLockService.calculateExpirationTime();
+        return new ResHoldSeatDTO(req.getShowtimeId(), req.getSeatIds(), expiresAt,
+                "Giữ ghế thành công trong 5 phút");
     }
 
     public ResSeatDTO handleCreateSeat(ReqCreateSeatDTO reqDTO) throws IdInvalidException {

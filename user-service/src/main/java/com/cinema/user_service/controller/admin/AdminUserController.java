@@ -38,12 +38,12 @@ public class AdminUserController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ResUserDTO> getUserById(@PathVariable long id) throws IdInvalidException {
+    public ResponseEntity<ResUserDTO> getUserById(@PathVariable("id") long id) throws IdInvalidException {
         return ResponseEntity.status(HttpStatus.OK).body(this.userService.fetchUserById(id));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<ResUserDTO> updateUser(@PathVariable long id,
+    public ResponseEntity<ResUserDTO> updateUser(@PathVariable("id") long id,
             @Valid @RequestBody ReqUpdateUserDTO reqUpdateUserDTO)
             throws IdInvalidException {
         return ResponseEntity.ok(this.userService.handleUpdateUser(id, reqUpdateUserDTO));

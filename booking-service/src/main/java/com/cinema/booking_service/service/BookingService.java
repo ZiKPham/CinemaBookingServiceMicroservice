@@ -19,6 +19,7 @@ import com.cinema.booking_service.domain.request.BookingSearchCriteria;
 import com.cinema.booking_service.domain.request.ReqBookingDTO;
 import com.cinema.booking_service.domain.request.ReqHoldSeatDTO;
 import com.cinema.booking_service.domain.response.ResBookingDTO;
+import com.cinema.booking_service.domain.response.ResSeatDTO;
 import com.cinema.booking_service.domain.response.ResSeatLockDetailDTO;
 import com.cinema.booking_service.domain.response.ResShowtimeDTO;
 import com.cinema.booking_service.domain.response.ResUserDTO;
@@ -66,6 +67,27 @@ public class BookingService {
 
         if (showtimeInfo == null) {
             throw new IdInvalidException("Không tìm thấy thông tin suất chiếu!");
+        }
+
+        Long roomId = showtimeInfo.getRoom() == null ? null : showtimeInfo.getRoom().getId();
+        if (roomId == null) {
+            throw new IdInvalidException("Suất chiếu chưa được gán phòng chiếu!");
+        }
+
+        RestResponse<List<ResSeatDTO>> roomSeatsResponse = cinemaClient.getSeatsByRoomId(roomId);
+        if (roomSeatsResponse == null || roomSeatsResponse.getData() == null) {
+            throw new IdInvalidException("Không thể lấy danh sách ghế của phòng chiếu!");
+        }
+
+        List<Long> roomSeatIds = roomSeatsResponse.getData().stream()
+                .map(ResSeatDTO::getId)
+                .toList();
+        for (Long seatId : req.getSeatIds()) {
+            if (!roomSeatIds.contains(seatId)) {
+                throw new IdInvalidException(
+                        "Ghế " + seatId + " không thuộc phòng " + roomId + " của suất chiếu "
+                                + req.getShowtimeId() + "!");
+            }
         }
 
         // 1. Kiểm tra xem các ghế có đang bị ai giữ tạm thời bên cinema-service (Redis)

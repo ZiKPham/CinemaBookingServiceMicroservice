@@ -67,6 +67,10 @@ public class SeatLockService {
         return new ResHoldSeatDTO(showtimeId, seatId, userEmail, expiresAt);
     }
 
+    public Instant calculateExpirationTime() {
+        return Instant.now().plusSeconds(LOCK_TTL_SECONDS);
+    }
+
     private String generateLockKey(Long showtimeId, Long seatId) {
         return "seat:lock:" + showtimeId + ":" + seatId;
     }

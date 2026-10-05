@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import io.swagger.v3.oas.annotations.Parameter;
 
 import com.cinema.booking_service.domain.request.ReqBookingDTO;
 import com.cinema.booking_service.domain.response.ResBookingDTO;
@@ -31,7 +32,7 @@ public class BookingController {
 
     @PostMapping
     public ResponseEntity<ResBookingDTO> createBooking(@Valid @RequestBody ReqBookingDTO reqBookingDTO,
-            @RequestHeader(value = "X-User-Email", required = false) String email)
+            @Parameter(hidden = true) @RequestHeader("X-User-Email") String email)
             throws IdInvalidException {
         return ResponseEntity.ok(this.bookingService.handleCreateBooking(reqBookingDTO, email));
     }
@@ -46,20 +47,20 @@ public class BookingController {
 
     @GetMapping("/me")
     public ResponseEntity<List<ResBookingDTO>> getMyBookings(
-            @RequestParam(value = "X-User-Email", required = false) String userEmail) throws IdInvalidException {
+            @Parameter(hidden = true) @RequestHeader("X-User-Email") String userEmail) throws IdInvalidException {
         return ResponseEntity.ok(this.bookingService.getMyBookings(userEmail));
     }
 
     @GetMapping("/my-history")
     public ResponseEntity<List<ResBookingDTO>> getMyBookingHistory(
-            @RequestHeader(value = "X-User-Email", required = false) String userEmail) throws IdInvalidException {
+            @Parameter(hidden = true) @RequestHeader("X-User-Email") String userEmail) throws IdInvalidException {
         List<ResBookingDTO> history = bookingService.getBookingHistoryByUser(userEmail);
         return ResponseEntity.ok(history);
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<ResBookingDTO> getBookingById(@PathVariable("id") Long id,
-            @RequestHeader(value = "X-User-Email", required = false) String userEmail)
+            @Parameter(hidden = true) @RequestHeader("X-User-Email") String userEmail)
             throws IdInvalidException {
         ResBookingDTO detail = bookingService.getBookingDetail(id, userEmail);
         return ResponseEntity.ok(detail);
@@ -67,7 +68,7 @@ public class BookingController {
 
     @PostMapping("/{id}/cancel")
     public ResponseEntity<ResBookingDTO> cancelBooking(@PathVariable("id") Long id,
-            @RequestHeader(value = "X-User-Email", required = false) String userEmail)
+            @Parameter(hidden = true) @RequestHeader("X-User-Email") String userEmail)
             throws IdInvalidException {
         ResBookingDTO cancelledBooking = bookingService.cancelBooking(id, userEmail);
         return ResponseEntity.ok(cancelledBooking);

@@ -9,6 +9,7 @@ import com.cinema.pay_service.service.MoMoPaymentService;
 import com.cinema.pay_service.service.PaymentService;
 import com.cinema.pay_service.util.error.IdInvalidException;
 
+import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
@@ -26,7 +27,7 @@ public class PaymentController {
     @GetMapping("/vn-pay")
     public ResponseEntity<String> getVNPayUrl(
             @RequestParam("bookingId") Long bookingId,
-            @RequestHeader(value = "X-User-Email", required = false) String userEmail,
+            @Parameter(hidden = true) @RequestHeader(value = "X-User-Email", required = false) String userEmail,
             HttpServletRequest request) throws IdInvalidException {
 
         String paymentUrl = this.paymentService.createVNPayPayment(bookingId, userEmail, request);
@@ -47,7 +48,8 @@ public class PaymentController {
     @PostMapping("/momo/{bookingId}")
     public ResponseEntity<String> createMoMoPayment(
             @PathVariable("bookingId") Long bookingId,
-            @RequestHeader(value = "X-User-Email", required = false) String userEmail) throws IdInvalidException {
+            @Parameter(hidden = true) @RequestHeader(value = "X-User-Email", required = false) String userEmail)
+            throws IdInvalidException {
 
         String payUrl = this.momoPaymentService.createMoMoPayment(bookingId, userEmail);
         return ResponseEntity.ok(payUrl);

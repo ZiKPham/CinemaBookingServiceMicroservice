@@ -4,16 +4,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.cinema.cinema_service.client.UserClient;
 import com.cinema.cinema_service.domain.request.ReqHoldSeatDTO;
 import com.cinema.cinema_service.domain.response.ResHoldSeatDTO;
-import com.cinema.cinema_service.domain.response.ResUserDTO;
 import com.cinema.cinema_service.service.SeatLockService;
+import com.cinema.cinema_service.service.SeatService;
 import com.cinema.cinema_service.util.error.IdInvalidException;
 
+import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
-
-import java.time.Instant;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -27,38 +25,18 @@ import org.springframework.web.bind.annotation.RequestHeader;
 public class SeatController {
 
     private final SeatLockService seatLockService;
-    private final UserClient userClient;
+    private final SeatService seatService;
 
-    public SeatController(SeatLockService seatLockService, UserClient userClient) {
+    public SeatController(SeatLockService seatLockService, SeatService seatService) {
         this.seatLockService = seatLockService;
-        this.userClient = userClient;
+        this.seatService = seatService;
     }
 
     @PostMapping("/hold")
     public ResponseEntity<?> holdSeats(@Valid @RequestBody ReqHoldSeatDTO request,
-            @RequestHeader(value = "X-User-Email", required = false) String userEmail)
+            @Parameter(hidden = true) @RequestHeader(value = "X-User-Email") String userEmail)
             throws IdInvalidException {
-        if (userEmail == null || userEmail.trim().isEmpty()) {
-            throw new IdInvalidException("Xác thực người dùng không hợp lệ hoặc thiếu thông tin email");
-        }
-
-        // Lấy ID từ user-service một lần khi giữ ghế
-        ResUserDTO userDto = userClient.getUserByEmail(userEmail);
-        if (userDto == null) {
-            throw new IdInvalidException("Không tìm thấy thông tin người dùng trên hệ thống");
-        }
-
-        for (Long seatId : request.getSeatIds()) {
-            boolean success = seatLockService.lockSeat(request.getShowtimeId(), seatId, userEmail);
-            if (!success) {
-                throw new IdInvalidException("Ghế có ID " + seatId + " đang được giữ hoặc đã có người chọn!");
-            }
-        }
-
-        Instant expiresAt = Instant.now().plusSeconds(300);
-        ResHoldSeatDTO res = new ResHoldSeatDTO(request.getShowtimeId(), request.getSeatIds(), expiresAt,
-                "Giữ ghế thành công trong 5 phút");
-
+        ResHoldSeatDTO res = seatService.handleHoldSeats(request, userEmail);
         return ResponseEntity.ok(res);
     }
 
