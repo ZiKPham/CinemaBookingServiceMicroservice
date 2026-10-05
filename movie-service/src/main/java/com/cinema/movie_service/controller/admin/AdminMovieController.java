@@ -41,12 +41,14 @@ public class AdminMovieController {
     }
 
     @GetMapping("/search/{name}")
-    public ResponseEntity<List<ResMovieDTO>> getMovieByName(@PathVariable String name) throws NameInvalidException {
+    public ResponseEntity<List<ResMovieDTO>> getMovieByName(@PathVariable("name") String name)
+            throws NameInvalidException {
         return ResponseEntity.ok(this.movieService.fetchMovieByName(name));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<ResMovieDTO> updateMovie(@PathVariable long id, @Valid @RequestBody ReqUpdateMovieDTO reqDTO)
+    public ResponseEntity<ResMovieDTO> updateMovie(@PathVariable("id") long id,
+            @Valid @RequestBody ReqUpdateMovieDTO reqDTO)
             throws IdInvalidException {
         return ResponseEntity.ok(this.movieService.handleUpdateMovie(id, reqDTO));
     }

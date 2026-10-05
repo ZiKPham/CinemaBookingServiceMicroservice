@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -46,6 +48,7 @@ public class UserService {
                 .collect(Collectors.toList());
     }
 
+    @Cacheable(value = "user-detail", key = "#p0")
     public ResUserDTO fetchUserById(Long id) throws IdInvalidException {
         Optional<User> userOptional = this.userRepository.findById(id);
         if (!userOptional.isPresent()) {
@@ -54,6 +57,7 @@ public class UserService {
         return this.convertToResUserDTO(userOptional.get());
     }
 
+    @Cacheable(value = "user-email", key = "#p0")
     public ResUserDTO getUserByEmail(String email) throws IdInvalidException {
         User user = this.userRepository.findByEmail(email);
         if (user == null) {
@@ -62,6 +66,7 @@ public class UserService {
         return convertToResUserDTO(user);
     }
 
+    @CacheEvict(value = { "user-detail", "user-email" }, allEntries = true)
     public ResUserDTO handleUpdateUser(Long id, ReqUpdateUserDTO reqUpdateUserDTO) throws IdInvalidException {
         Optional<User> uOptional = this.userRepository.findById(id);
         if (!uOptional.isPresent()) {
@@ -82,6 +87,7 @@ public class UserService {
         return this.convertToResUserDTO(updateUser);
     }
 
+    @CacheEvict(value = { "user-detail", "user-email" }, allEntries = true)
     public void handleDeleteUser(long id) throws IdInvalidException {
         Optional<User> uOptional = this.userRepository.findById(id);
         if (!uOptional.isPresent()) {

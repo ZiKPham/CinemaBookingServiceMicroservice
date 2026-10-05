@@ -3,6 +3,7 @@ package com.cinema.pay_service.service;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -93,6 +94,7 @@ public class MoMoPaymentService {
     }
 
     @Transactional
+    @CacheEvict(value = "revenue-stats", allEntries = true)
     public boolean processMoMoCallback(String orderId, int resultCode) throws IdInvalidException {
         Payment payment = this.paymentRepository.findByTransactionCode(orderId)
                 .orElseThrow(() -> new IdInvalidException("Giao dịch không tồn tại với mã: " + orderId));

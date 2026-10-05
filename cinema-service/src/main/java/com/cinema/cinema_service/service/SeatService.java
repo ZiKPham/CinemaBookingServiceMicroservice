@@ -21,6 +21,8 @@ import com.cinema.cinema_service.util.error.IdInvalidException;
 
 import jakarta.persistence.criteria.Predicate;
 
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -104,6 +106,7 @@ public class SeatService {
                 "Giữ ghế thành công trong 5 phút");
     }
 
+    @CacheEvict(value = "room-seats", allEntries = true)
     public ResSeatDTO handleCreateSeat(ReqCreateSeatDTO reqDTO) throws IdInvalidException {
         Room room = roomRepository.findById(reqDTO.getRoomId())
                 .orElseThrow(() -> new IdInvalidException("Room với id = " + reqDTO.getRoomId() + " không tồn tại"));
@@ -117,6 +120,7 @@ public class SeatService {
         return convertToResSeatDTO(savedSeat);
     }
 
+    @CacheEvict(value = "room-seats", allEntries = true)
     public ResSeatDTO handleUpdateSeat(ReqUpdateSeatDTO reqDTO) throws IdInvalidException {
         Seat currentSeat = seatRepository.findById(reqDTO.getId())
                 .orElseThrow(() -> new IdInvalidException("Seat với id = " + reqDTO.getId() + " không tồn tại"));
@@ -134,6 +138,7 @@ public class SeatService {
         return convertToResSeatDTO(updatedSeat);
     }
 
+    @CacheEvict(value = "room-seats", allEntries = true)
     public void handleDeleteSeat(long id) throws IdInvalidException {
         Seat seat = seatRepository.findById(id)
                 .orElseThrow(() -> new IdInvalidException("Seat với id = " + id + " không tồn tại"));
@@ -208,6 +213,7 @@ public class SeatService {
         return dto;
     }
 
+    @Cacheable(value = "room-seats", key = "#p0 + '-' + #p1")
     public List<ResSeatDTO> getSeatsByRoomIdAndShowtime(long roomId, Long showtimeId) {
         // 1. Lấy danh sách ghế tĩnh của phòng từ database
         List<Seat> seats = seatRepository.findByRoomId(roomId);

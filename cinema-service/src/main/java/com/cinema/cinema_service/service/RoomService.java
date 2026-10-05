@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -34,6 +36,7 @@ public class RoomService {
         this.cinemaRepository = cinemaRepository;
     }
 
+    @CacheEvict(value = "room-detail", allEntries = true)
     public ResRoomDTO handleCreateRoom(ReqCreateRoomDTO reqDTO) throws IdInvalidException {
         Optional<Cinema> cOptional = this.cinemaRepository.findById(reqDTO.getCinemaId());
         if (!cOptional.isPresent()) {
@@ -49,6 +52,7 @@ public class RoomService {
         return this.convertToResRoomDTO(savedRoom);
     }
 
+    @Cacheable(value = "room-detail", key = "#p0")
     public ResRoomDTO fetchRoomById(long id) throws IdInvalidException {
         Optional<Room> roomOptional = this.roomRepository.findById(id);
         if (!roomOptional.isPresent()) {
@@ -125,6 +129,7 @@ public class RoomService {
                 .collect(Collectors.toList());
     }
 
+    @CacheEvict(value = "room-detail", key = "#p0")
     public ResRoomDTO handleUpdateRoom(long id, ReqUpdateRoomDTO reqDTO) throws IdInvalidException {
         Optional<Room> rOptional = this.roomRepository.findById(id);
         if (!rOptional.isPresent()) {
@@ -152,6 +157,7 @@ public class RoomService {
         return this.convertToResRoomDTO(updatedRoom);
     }
 
+    @CacheEvict(value = "room-detail", key = "#p0")
     public void handleDeleteRoom(long id) throws IdInvalidException {
         Optional<Room> roomOptional = this.roomRepository.findById(id);
         if (!roomOptional.isPresent()) {

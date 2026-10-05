@@ -5,6 +5,9 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -52,6 +55,10 @@ public class BookingService {
     }
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "user-bookings", key = "#userEmail"),
+            @CacheEvict(value = "booking-detail", allEntries = true)
+    })
     public ResBookingDTO handleCreateBooking(ReqBookingDTO req, String userEmail) throws IdInvalidException {
         // 0. (Tùy chọn) Kiểm tra suất chiếu có tồn tại không qua showtime-servic
         ResShowtimeDTO showtimeInfo = null;
@@ -189,6 +196,7 @@ public class BookingService {
         this.bookingRepository.save(booking);
     }
 
+    @Cacheable(value = "user-bookings", key = "#p0")
     public List<ResBookingDTO> getMyBookings(String userEmail) throws IdInvalidException {
         if (userEmail == null || userEmail.isBlank()) {
             throw new IdInvalidException("Xác thực người dùng không hợp lệ");
@@ -208,6 +216,7 @@ public class BookingService {
                 .collect(Collectors.toList());
     }
 
+    @Cacheable(value = "booking-detail", key = "#p0")
     public ResBookingDTO getBookingDetail(Long id, String userEmail) throws IdInvalidException {
         if (userEmail == null || userEmail.isBlank()) {
             throw new IdInvalidException("Xác thực người dùng không hợp lệ");
@@ -220,6 +229,10 @@ public class BookingService {
     }
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "booking-detail", key = "#p0"),
+            @CacheEvict(value = "user-bookings", allEntries = true)
+    })
     public ResBookingDTO cancelBooking(Long id, String userEmail) throws IdInvalidException {
         if (userEmail == null || userEmail.isBlank()) {
             throw new IdInvalidException("Xác thực người dùng không hợp lệ");

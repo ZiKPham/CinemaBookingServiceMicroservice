@@ -44,10 +44,11 @@ public class AdminShowtimeController {
         return ResponseEntity.ok(this.showtimeService.fetchShowtimeById(id));
     }
 
-    @PutMapping
-    public ResponseEntity<ResShowtimeDTO> updateShowtime(@Valid @RequestBody ReqUpdateShowtimeDTO reqDTO)
+    @PutMapping("{id}")
+    public ResponseEntity<ResShowtimeDTO> updateShowtime(@PathVariable("id") long id,
+            @Valid @RequestBody ReqUpdateShowtimeDTO reqDTO)
             throws IdInvalidException {
-        ResShowtimeDTO res = this.showtimeService.handleUpdateShowtime(reqDTO);
+        ResShowtimeDTO res = this.showtimeService.handleUpdateShowtime(id, reqDTO);
         return ResponseEntity.ok(res);
     }
 

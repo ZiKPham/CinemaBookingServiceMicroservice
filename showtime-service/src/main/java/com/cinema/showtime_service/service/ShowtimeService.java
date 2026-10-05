@@ -1,10 +1,13 @@
 package com.cinema.showtime_service.service;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -44,6 +47,7 @@ public class ShowtimeService {
         this.movieClient = movieClient;
     }
 
+    @CacheEvict(value = "showtimes", allEntries = true)
     public ResShowtimeDTO handleCreateShowtime(ReqCreateShowtimeDTO reqDTO) throws IdInvalidException {
         try {
             ResMovieDTO movieInfo = movieClient.getMovieById(reqDTO.getMovieId());
@@ -87,6 +91,7 @@ public class ShowtimeService {
         return this.convertToResShowtimeDTO(saved);
     }
 
+    @Cacheable(value = "showtimes")
     public ResultPaginationDTO fetchAllShowtimes(ShowtimeSearchCriteria criteria, Pageable pageable) {
         Specification<Showtime> spec = (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
@@ -144,6 +149,7 @@ public class ShowtimeService {
         return rs;
     }
 
+    @Cacheable(value = "showtime-detail", key = "#p0")
     public ResShowtimeDTO fetchShowtimeById(Long id) throws IdInvalidException {
         Optional<Showtime> sOptional = this.showtimeRepository.findById(id);
         if (!sOptional.isPresent()) {
@@ -152,33 +158,52 @@ public class ShowtimeService {
         return this.convertToResShowtimeDTO(sOptional.get());
     }
 
-    public ResShowtimeDTO handleUpdateShowtime(ReqUpdateShowtimeDTO reqDTO) throws IdInvalidException {
-        Optional<Showtime> sOptional = this.showtimeRepository.findById(reqDTO.getId());
+    @CacheEvict(value = { "showtime-detail", "showtime-seats" }, key = "#p0")
+    public ResShowtimeDTO handleUpdateShowtime(long id, ReqUpdateShowtimeDTO reqDTO) throws IdInvalidException {
+        Optional<Showtime> sOptional = this.showtimeRepository.findById(id);
         if (!sOptional.isPresent()) {
-            throw new IdInvalidException("Showtime với id = " + reqDTO.getId() + " không tồn tại");
+            throw new IdInvalidException("Showtime với id = " + id + " không tồn tại");
         }
 
-        if (!reqDTO.getStartTime().isBefore(reqDTO.getEndTime())) {
+        Showtime currentShowtime = sOptional.get();
+
+        // 1. Xác định thông tin mới (nếu client không truyền lên thì lấy lại giá trị cũ
+        // trong DB)
+        Instant targetStartTime = reqDTO.getStartTime() != null ? reqDTO.getStartTime()
+                : currentShowtime.getStartTime();
+        Instant targetEndTime = reqDTO.getEndTime() != null ? reqDTO.getEndTime()
+                : currentShowtime.getEndTime();
+        Long targetRoomId = reqDTO.getRoomId() != null ? reqDTO.getRoomId()
+                : currentShowtime.getRoomId();
+        Long targetMovieId = reqDTO.getMovieId() != null ? reqDTO.getMovieId()
+                : currentShowtime.getMovieId();
+        Double targetPrice = reqDTO.getPrice() != null ? reqDTO.getPrice()
+                : currentShowtime.getPrice();
+
+        // 2. Kiểm tra logic thời gian bắt đầu phải trước kết thúc
+        if (!targetStartTime.isBefore(targetEndTime)) {
             throw new IdInvalidException("Thời gian bắt đầu phải diễn ra trước thời gian kết thúc");
         }
 
+        // 3. Kiểm tra trùng lịch suất chiếu (dùng id hiện tại để loại trừ chính nó)
         List<Showtime> overlaps = this.showtimeRepository.findOverLappingShowtimesForUpdate(
-                reqDTO.getId(), reqDTO.getRoomId(), reqDTO.getStartTime(), reqDTO.getEndTime());
+                id, targetRoomId, targetStartTime, targetEndTime);
         if (!overlaps.isEmpty()) {
             throw new IdInvalidException("Khung giờ này phòng đã có suất chiếu khác. Vui lòng chọn giờ khác!");
         }
 
-        Showtime currentShowtime = sOptional.get();
-        currentShowtime.setStartTime(reqDTO.getStartTime());
-        currentShowtime.setEndTime(reqDTO.getEndTime());
-        currentShowtime.setPrice(reqDTO.getPrice());
-        currentShowtime.setMovieId(reqDTO.getMovieId());
-        currentShowtime.setRoomId(reqDTO.getRoomId());
+        // 4. Gán dữ liệu vào entity
+        currentShowtime.setStartTime(targetStartTime);
+        currentShowtime.setEndTime(targetEndTime);
+        currentShowtime.setPrice(targetPrice);
+        currentShowtime.setMovieId(targetMovieId);
+        currentShowtime.setRoomId(targetRoomId);
 
         Showtime updated = this.showtimeRepository.save(currentShowtime);
         return this.convertToResShowtimeDTO(updated);
     }
 
+    @CacheEvict(value = { "showtime-detail", "showtime-seats" }, key = "#p0")
     public void handleDeleteShowtime(long id) throws IdInvalidException {
         Optional<Showtime> showtimeOpt = this.showtimeRepository.findById(id);
         if (!showtimeOpt.isPresent()) {
@@ -187,6 +212,7 @@ public class ShowtimeService {
         this.showtimeRepository.deleteById(id);
     }
 
+    @Cacheable(value = "showtime-seats", key = "#p0")
     public List<ResSeatDTO> getSeatMapByShowtime(long showtimeId) throws IdInvalidException {
         // 1. Lấy thông tin suất chiếu
         Showtime showtime = this.showtimeRepository.findById(showtimeId)

@@ -9,14 +9,8 @@ import lombok.Setter;
 @Getter
 @Setter
 public class ReqUpdateShowtimeDTO {
-
-    @NotNull(message = "id không được để trống")
-    private Long id;
-
-    @NotNull(message = "startTime không được để trống")
     private Instant startTime;
 
-    @NotNull(message = "endTime không được để trống")
     private Instant endTime;
 
     @NotNull(message = "Giá vé không được để trống")

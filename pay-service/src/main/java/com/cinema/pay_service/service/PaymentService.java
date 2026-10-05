@@ -10,6 +10,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -137,6 +139,7 @@ public class PaymentService {
      * Xử lý kết quả trả về từ VNPay (Callback / IPN)
      */
     @Transactional
+    @CacheEvict(value = "revenue-stats", allEntries = true)
     public boolean processCallback(Map<String, String> queryParams) throws IdInvalidException {
         String vnp_ResponseCode = queryParams.get("vnp_ResponseCode");
         String vnp_TxnRef = queryParams.get("vnp_TxnRef");
@@ -204,6 +207,7 @@ public class PaymentService {
     /**
      * Thống kê doanh thu từ các giao dịch thành công trong pay-service
      */
+    @Cacheable(value = "revenue-stats", key = "#startDate + '_' + #endDate")
     public Map<String, Object> getRevenueStatistics(String startDate, String endDate) {
         List<Payment> successPayments = this.paymentRepository.findAll().stream()
                 .filter(p -> p.getStatus() == PaymentStatus.SUCCESS)

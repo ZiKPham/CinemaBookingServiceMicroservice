@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -115,6 +117,7 @@ public class MovieService {
         return rs;
     }
 
+    @Cacheable(value = "movies", key = "#p0")
     public ResMovieDTO fetchMovieById(long id) throws IdInvalidException {
         Optional<Movie> movieOptional = this.movieRepository.findById(id);
         if (!movieOptional.isPresent()) {
@@ -136,6 +139,7 @@ public class MovieService {
                 .collect(Collectors.toList());
     }
 
+    @CacheEvict(value = "movies", key = "#p0")
     public ResMovieDTO handleUpdateMovie(long id, ReqUpdateMovieDTO reqDTO) throws IdInvalidException {
         Optional<Movie> mOptional = this.movieRepository.findById(id);
         if (!mOptional.isPresent()) {
@@ -183,6 +187,7 @@ public class MovieService {
         return this.convertToResMovieDTO(updatedMovie);
     }
 
+    @CacheEvict(value = "movies", key = "#p0")
     public void handleDeleteMovie(long id) throws IdInvalidException {
         Optional<Movie> mOptional = this.movieRepository.findById(id);
         if (!mOptional.isPresent()) {

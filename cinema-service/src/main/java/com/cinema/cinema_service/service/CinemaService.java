@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import com.cinema.cinema_service.domain.Cinema;
@@ -22,6 +24,7 @@ public class CinemaService {
         this.cinemaRepository = cinemaRepository;
     }
 
+    @CacheEvict(value = "cinemas-list", allEntries = true)
     public ResCinemaDTO handleCreateCinema(ReqCreateCinemaDTO reqDTO) {
         Cinema cinema = new Cinema();
         cinema.setName(reqDTO.getName());
@@ -32,6 +35,7 @@ public class CinemaService {
         return this.convertToResCinemaDTO(savedCinema);
     }
 
+    @Cacheable(value = "cinemas-list")
     public List<ResCinemaDTO> fetchAllCinemas() {
         List<Cinema> cinemas = this.cinemaRepository.findAll();
         return cinemas.stream()
