@@ -24,21 +24,26 @@ public class MoMoPaymentService {
     private final EmailService emailService;
     private final QRCodeService qrCodeService;
     private final BookingClient bookingClient; //
+    private final PaymentRateLimiterService rateLimiterService;
 
     public MoMoPaymentService(PaymentRepository paymentRepository,
             EmailService emailService,
             QRCodeService qrCodeService,
-            BookingClient bookingClient) {
+            BookingClient bookingClient,
+            PaymentRateLimiterService rateLimiterService) {
         this.paymentRepository = paymentRepository;
         this.emailService = emailService;
         this.qrCodeService = qrCodeService;
         this.bookingClient = bookingClient;
+        this.rateLimiterService = rateLimiterService;
     }
 
     /**
      * Tạo URL thanh toán MoMo Sandbox / Mock page
      */
     public String createMoMoPayment(Long bookingId, String userEmail) throws IdInvalidException {
+        rateLimiterService.checkRateLimit(userEmail);
+
         RestResponse<ResBookingDTO> response = bookingClient.getBookingById(bookingId, userEmail);
         if (response == null || response.getData() == null) {
             throw new IdInvalidException("Không tìm thấy thông tin đơn hàng với ID: " + bookingId);

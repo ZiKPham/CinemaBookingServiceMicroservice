@@ -36,17 +36,20 @@ public class PaymentService {
     private final EmailService emailService;
     private final QRCodeService qrCodeService;
     private final BookingClient bookingClient;
+    private final PaymentRateLimiterService rateLimiterService;
 
     public PaymentService(VNPayConfig vnPayConfig,
             PaymentRepository paymentRepository,
             EmailService emailService,
             QRCodeService qrCodeService,
-            BookingClient bookingClient) {
+            BookingClient bookingClient,
+            PaymentRateLimiterService rateLimiterService) {
         this.vnPayConfig = vnPayConfig;
         this.paymentRepository = paymentRepository;
         this.emailService = emailService;
         this.qrCodeService = qrCodeService;
         this.bookingClient = bookingClient;
+        this.rateLimiterService = rateLimiterService;
     }
 
     /**
@@ -54,6 +57,8 @@ public class PaymentService {
      */
     public String createVNPayPayment(Long bookingId, String userEmail, HttpServletRequest request)
             throws IdInvalidException {
+        rateLimiterService.checkRateLimit(userEmail);
+
         RestResponse<ResBookingDTO> response = bookingClient.getBookingById(bookingId, userEmail);
 
         if (response == null || response.getData() == null) {

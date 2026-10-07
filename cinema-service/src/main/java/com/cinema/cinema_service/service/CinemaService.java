@@ -18,10 +18,12 @@ import com.cinema.cinema_service.util.error.NameInvalidException;
 
 @Service
 public class CinemaService {
-    final private CinemaRepository cinemaRepository;
+    private final CinemaRepository cinemaRepository;
+    private final CinemaRateLimiterService rateLimiterService;
 
-    public CinemaService(CinemaRepository cinemaRepository) {
+    public CinemaService(CinemaRepository cinemaRepository, CinemaRateLimiterService rateLimiterService) {
         this.cinemaRepository = cinemaRepository;
+        this.rateLimiterService = rateLimiterService;
     }
 
     @CacheEvict(value = "cinemas-list", allEntries = true)
@@ -35,8 +37,16 @@ public class CinemaService {
         return this.convertToResCinemaDTO(savedCinema);
     }
 
-    @Cacheable(value = "cinemas-list")
     public List<ResCinemaDTO> fetchAllCinemas() {
+        // Rate limit luôn được thực thi trước tiên, không bị cache cản trở
+        rateLimiterService.checkRateLimit("global-cinemas");
+
+        // Gọi sang method có cache bên dưới
+        return fetchCachedAllCinemas();
+    }
+
+    @Cacheable(value = "cinemas-list")
+    public List<ResCinemaDTO> fetchCachedAllCinemas() {
         List<Cinema> cinemas = this.cinemaRepository.findAll();
         return cinemas.stream()
                 .map(this::convertToResCinemaDTO)

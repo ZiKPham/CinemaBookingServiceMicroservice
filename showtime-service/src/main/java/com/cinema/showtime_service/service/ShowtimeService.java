@@ -8,9 +8,11 @@ import java.util.stream.Collectors;
 
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import com.cinema.showtime_service.client.BookingClient;
@@ -38,13 +40,16 @@ public class ShowtimeService {
     private final CinemaClient cinemaClient;
     private final BookingClient bookingClient;
     private final MovieClient movieClient;
+    private final ShowtimeRateLimiterService rateLimiterService;
 
     public ShowtimeService(ShowtimeRepository showtimeRepository, CinemaClient cinemaClient,
-            BookingClient bookingClient, MovieClient movieClient) {
+            BookingClient bookingClient, MovieClient movieClient,
+            ShowtimeRateLimiterService rateLimiterService) {
         this.showtimeRepository = showtimeRepository;
         this.cinemaClient = cinemaClient;
         this.bookingClient = bookingClient;
         this.movieClient = movieClient;
+        this.rateLimiterService = rateLimiterService;
     }
 
     @CacheEvict(value = "showtimes", allEntries = true)
@@ -93,6 +98,9 @@ public class ShowtimeService {
 
     @Cacheable(value = "showtimes")
     public ResultPaginationDTO fetchAllShowtimes(ShowtimeSearchCriteria criteria, Pageable pageable) {
+        rateLimiterService.checkRateLimit(
+                criteria.getMovieId() != null ? String.valueOf(criteria.getMovieId()) : "global-search");
+
         Specification<Showtime> spec = (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -158,7 +166,11 @@ public class ShowtimeService {
         return this.convertToResShowtimeDTO(sOptional.get());
     }
 
-    @CacheEvict(value = { "showtime-detail", "showtime-seats" }, key = "#p0")
+    @Caching(evict = {
+            @CacheEvict(value = "showtimes", allEntries = true),
+            @CacheEvict(value = "showtime-detail", key = "#p0"),
+            @CacheEvict(value = "showtime-seats", key = "#p0")
+    })
     public ResShowtimeDTO handleUpdateShowtime(long id, ReqUpdateShowtimeDTO reqDTO) throws IdInvalidException {
         Optional<Showtime> sOptional = this.showtimeRepository.findById(id);
         if (!sOptional.isPresent()) {
@@ -203,7 +215,11 @@ public class ShowtimeService {
         return this.convertToResShowtimeDTO(updated);
     }
 
-    @CacheEvict(value = { "showtime-detail", "showtime-seats" }, key = "#p0")
+    @Caching(evict = {
+            @CacheEvict(value = "showtimes", allEntries = true),
+            @CacheEvict(value = "showtime-detail", key = "#p0"),
+            @CacheEvict(value = "showtime-seats", key = "#p0")
+    })
     public void handleDeleteShowtime(long id) throws IdInvalidException {
         Optional<Showtime> showtimeOpt = this.showtimeRepository.findById(id);
         if (!showtimeOpt.isPresent()) {

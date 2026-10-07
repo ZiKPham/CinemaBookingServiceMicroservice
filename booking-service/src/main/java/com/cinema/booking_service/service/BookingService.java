@@ -56,7 +56,7 @@ public class BookingService {
 
     @Transactional
     @Caching(evict = {
-            @CacheEvict(value = "user-bookings", key = "#userEmail"),
+            @CacheEvict(value = "user-bookings", key = "#p1"),
             @CacheEvict(value = "booking-detail", allEntries = true)
     })
     public ResBookingDTO handleCreateBooking(ReqBookingDTO req, String userEmail) throws IdInvalidException {
@@ -216,7 +216,7 @@ public class BookingService {
                 .collect(Collectors.toList());
     }
 
-    @Cacheable(value = "booking-detail", key = "#p0")
+    @Cacheable(value = "booking-detail", key = "#p0 + ':' + #p1")
     public ResBookingDTO getBookingDetail(Long id, String userEmail) throws IdInvalidException {
         if (userEmail == null || userEmail.isBlank()) {
             throw new IdInvalidException("Xác thực người dùng không hợp lệ");

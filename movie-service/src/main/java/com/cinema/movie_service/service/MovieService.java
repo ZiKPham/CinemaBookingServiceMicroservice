@@ -28,9 +28,11 @@ import jakarta.persistence.criteria.Predicate;
 public class MovieService {
 
     private final MovieRepository movieRepository;
+    private final MovieRateLimiterService rateLimiterService;
 
-    public MovieService(MovieRepository movieRepository) {
+    public MovieService(MovieRepository movieRepository, MovieRateLimiterService rateLimiterService) {
         this.movieRepository = movieRepository;
+        this.rateLimiterService = rateLimiterService;
     }
 
     public ResMovieDTO handleCreateMovie(ReqCreateMovieDTO reqDTO) {
@@ -53,6 +55,10 @@ public class MovieService {
     }
 
     public ResultPaginationDTO fetchAllMovies(MovieSearchCriteria criteria, Pageable pageable) {
+        rateLimiterService
+                .checkRateLimit(criteria.getName() != null && !criteria.getName().isEmpty() ? criteria.getName()
+                        : "global-movie-search");
+
         // 1. Xây dựng Specification thủ công từ Search Criteria DTO
         Specification<Movie> spec = (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
@@ -129,6 +135,7 @@ public class MovieService {
     }
 
     public List<ResMovieDTO> fetchMovieByName(String name) throws NameInvalidException {
+        rateLimiterService.checkRateLimit("movie-name-" + name);
         List<Movie> mOptional = this.movieRepository.findByNameContainingIgnoreCase(name);
         if (mOptional.isEmpty()) {
             throw new NameInvalidException("Phim tên '" + name + "' không tồn tại");

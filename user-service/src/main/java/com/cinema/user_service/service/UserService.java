@@ -10,18 +10,16 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.cinema.user_service.domain.User;
-import com.cinema.user_service.domain.request.RegisterDTO;
 import com.cinema.user_service.domain.request.ReqCreateUserDTO;
 import com.cinema.user_service.domain.request.ReqUpdateUserDTO;
-import com.cinema.user_service.domain.response.ResRegisterDTO;
 import com.cinema.user_service.domain.response.ResUserDTO;
 import com.cinema.user_service.repository.UserRepository;
 import com.cinema.user_service.util.error.IdInvalidException;
 
 @Service
 public class UserService {
-    final private PasswordEncoder passwordEncoder;
-    final private UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final UserRepository userRepository;
 
     public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
@@ -31,13 +29,9 @@ public class UserService {
     public User handleCreateUser(ReqCreateUserDTO reqUserDTO) {
         User user = new User();
         user.setEmail(reqUserDTO.getEmail());
-
-        String hashPassword = this.passwordEncoder.encode(reqUserDTO.getPassword());
-        user.setPassword(hashPassword);
-
+        user.setPassword(this.passwordEncoder.encode(reqUserDTO.getPassword()));
         user.setFullName(reqUserDTO.getFullName());
         user.setPhone(reqUserDTO.getPhone());
-
         return this.userRepository.save(user);
     }
 
@@ -77,8 +71,6 @@ public class UserService {
         if (reqUpdateUserDTO.getFullName() != null && !reqUpdateUserDTO.getFullName().trim().isEmpty()) {
             currentUser.setFullName(reqUpdateUserDTO.getFullName());
         }
-
-        // Chỉ update phone nếu client CÓ truyền vào
         if (reqUpdateUserDTO.getPhone() != null && !reqUpdateUserDTO.getPhone().trim().isEmpty()) {
             currentUser.setPhone(reqUpdateUserDTO.getPhone());
         }
@@ -98,28 +90,6 @@ public class UserService {
 
     public User getUserByUsername(String username) {
         return this.userRepository.findByEmail(username);
-    }
-
-    public ResRegisterDTO handleRegister(RegisterDTO dto) throws IdInvalidException {
-        if (this.userRepository.existsByEmail(dto.getEmail())) {
-            throw new IdInvalidException("User với email " + dto.getEmail() + " không tồn tại");
-        }
-
-        User newUser = new User();
-        newUser.setEmail(dto.getEmail());
-        newUser.setPassword(this.passwordEncoder.encode(dto.getPassword()));
-        newUser.setPhone(dto.getPhone());
-        newUser.setFullName(dto.getFullName());
-
-        User saved = this.userRepository.save(newUser);
-
-        ResRegisterDTO res = new ResRegisterDTO();
-        res.setId(saved.getId());
-        res.setEmail(saved.getEmail());
-        res.setFullName(saved.getFullName());
-        res.setPhone(saved.getPhone());
-
-        return res;
     }
 
     public ResUserDTO convertToResUserDTO(User user) {

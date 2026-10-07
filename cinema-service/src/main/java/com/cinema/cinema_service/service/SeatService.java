@@ -41,20 +41,24 @@ public class SeatService {
     private final RoomRepository roomRepository;
     private final UserClient userClient;
     private final ShowtimeClient showtimeClient;
+    private final CinemaRateLimiterService rateLimiterService;
 
     public SeatService(SeatRepository seatRepository, SeatLockService seatLockService, RoomRepository roomRepository,
-            UserClient userClient, ShowtimeClient showtimeClient) {
+            UserClient userClient, ShowtimeClient showtimeClient, CinemaRateLimiterService rateLimiterService) {
         this.seatRepository = seatRepository;
         this.seatLockService = seatLockService;
         this.roomRepository = roomRepository;
         this.userClient = userClient;
         this.showtimeClient = showtimeClient;
+        this.rateLimiterService = rateLimiterService;
     }
 
     public ResHoldSeatDTO handleHoldSeats(ReqHoldSeatDTO req, String userEmail) throws IdInvalidException {
         if (userEmail == null || userEmail.trim().isEmpty()) {
             throw new IdInvalidException("Xác thực người dùng không hợp lệ hoặc thiếu thông tin email");
         }
+
+        rateLimiterService.checkRateLimit("hold-seat-" + userEmail);
 
         ResUserDTO userDTO = userClient.getUserByEmail(userEmail);
         if (userDTO == null) {
@@ -106,7 +110,7 @@ public class SeatService {
                 "Giữ ghế thành công trong 5 phút");
     }
 
-    @CacheEvict(value = "room-seats", allEntries = true)
+    @CacheEvict(value = { "room-seats", "showtime-room-seats" }, allEntries = true)
     public ResSeatDTO handleCreateSeat(ReqCreateSeatDTO reqDTO) throws IdInvalidException {
         Room room = roomRepository.findById(reqDTO.getRoomId())
                 .orElseThrow(() -> new IdInvalidException("Room với id = " + reqDTO.getRoomId() + " không tồn tại"));
@@ -120,7 +124,7 @@ public class SeatService {
         return convertToResSeatDTO(savedSeat);
     }
 
-    @CacheEvict(value = "room-seats", allEntries = true)
+    @CacheEvict(value = { "room-seats", "showtime-room-seats" }, allEntries = true)
     public ResSeatDTO handleUpdateSeat(ReqUpdateSeatDTO reqDTO) throws IdInvalidException {
         Seat currentSeat = seatRepository.findById(reqDTO.getId())
                 .orElseThrow(() -> new IdInvalidException("Seat với id = " + reqDTO.getId() + " không tồn tại"));
@@ -138,7 +142,7 @@ public class SeatService {
         return convertToResSeatDTO(updatedSeat);
     }
 
-    @CacheEvict(value = "room-seats", allEntries = true)
+    @CacheEvict(value = { "room-seats", "showtime-room-seats" }, allEntries = true)
     public void handleDeleteSeat(long id) throws IdInvalidException {
         Seat seat = seatRepository.findById(id)
                 .orElseThrow(() -> new IdInvalidException("Seat với id = " + id + " không tồn tại"));
@@ -146,6 +150,8 @@ public class SeatService {
     }
 
     public ResultPaginationDTO fetchAllSeats(SeatSearchCriteria criteria, Pageable pageable) {
+        rateLimiterService.checkRateLimit("seat-search");
+
         Specification<Seat> spec = (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -213,7 +219,7 @@ public class SeatService {
         return dto;
     }
 
-    @Cacheable(value = "room-seats", key = "#p0 + '-' + #p1")
+    @Cacheable(value = "showtime-room-seats", key = "#p0 + '-' + #p1")
     public List<ResSeatDTO> getSeatsByRoomIdAndShowtime(long roomId, Long showtimeId) {
         // 1. Lấy danh sách ghế tĩnh của phòng từ database
         List<Seat> seats = seatRepository.findByRoomId(roomId);

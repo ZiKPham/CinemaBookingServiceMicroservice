@@ -30,10 +30,13 @@ public class RoomService {
 
     private final RoomRepository roomRepository;
     private final CinemaRepository cinemaRepository;
+    private final CinemaRateLimiterService rateLimiterService;
 
-    public RoomService(RoomRepository roomRepository, CinemaRepository cinemaRepository) {
+    public RoomService(RoomRepository roomRepository, CinemaRepository cinemaRepository,
+            CinemaRateLimiterService rateLimiterService) {
         this.roomRepository = roomRepository;
         this.cinemaRepository = cinemaRepository;
+        this.rateLimiterService = rateLimiterService;
     }
 
     @CacheEvict(value = "room-detail", allEntries = true)
@@ -64,6 +67,8 @@ public class RoomService {
     }
 
     public ResultPaginationDTO fetchAllRooms(RoomSearchCriteria criteria, Pageable pageable) {
+        rateLimiterService.checkRateLimit("room-search-pagination");
+
         Specification<Room> spec = (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -107,6 +112,8 @@ public class RoomService {
     }
 
     public List<ResRoomDTO> fetchRoomsByCinemaAndRoomName(String cinemaName, String roomName) {
+        rateLimiterService.checkRateLimit("room-query-" + cinemaName + "-" + roomName);
+
         List<Room> rooms;
 
         boolean hasCinema = cinemaName != null && !cinemaName.trim().isEmpty();

@@ -31,7 +31,8 @@ public class MovieController {
     }
 
     @GetMapping("/search/{name}")
-    public ResponseEntity<List<ResMovieDTO>> getMovieByName(@PathVariable String name) throws NameInvalidException {
+    public ResponseEntity<List<ResMovieDTO>> getMovieByName(@PathVariable("name") String name)
+            throws NameInvalidException {
         return ResponseEntity.ok(this.movieService.fetchMovieByName(name));
     }
 

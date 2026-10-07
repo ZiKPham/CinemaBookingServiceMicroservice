@@ -8,10 +8,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
-import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 
-import com.cinema.cinema_service.domain.response.ResCinemaDTO;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
@@ -28,8 +27,10 @@ public class RedisConfig {
                 // 2. Sử dụng Jackson2JsonRedisSerializer tường minh cho kiểu ResMovieDTO
                 // (Giúp tránh hoàn toàn các lỗi về type info phức tạp của
                 // GenericJackson2JsonRedisSerializer)
-                Jackson2JsonRedisSerializer<ResCinemaDTO> serializer = new Jackson2JsonRedisSerializer<>(objectMapper,
-                                ResCinemaDTO.class);
+                GenericJackson2JsonRedisSerializer serializer = GenericJackson2JsonRedisSerializer.builder()
+                                .objectMapper(objectMapper)
+                                .defaultTyping(true)
+                                .build();
 
                 // 3. Cấu hình Redis Cache
                 RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()

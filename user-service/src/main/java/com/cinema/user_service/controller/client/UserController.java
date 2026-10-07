@@ -1,11 +1,8 @@
 package com.cinema.user_service.controller.client;
 
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import com.cinema.user_service.domain.User;
-import com.cinema.user_service.domain.request.ReqCreateUserDTO;
 import com.cinema.user_service.domain.request.ReqUpdateUserDTO;
 import com.cinema.user_service.domain.response.ResUserDTO;
 import com.cinema.user_service.service.UserService;

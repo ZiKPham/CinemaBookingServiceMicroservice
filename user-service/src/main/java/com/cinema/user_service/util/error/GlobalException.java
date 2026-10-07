@@ -10,6 +10,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.cinema.user_service.domain.RestResponse;
 
@@ -27,6 +28,32 @@ public class GlobalException {
         res.setError("Bad Request");
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(res);
+    }
+
+    @ExceptionHandler(value = org.springframework.security.core.AuthenticationException.class)
+    public ResponseEntity<RestResponse<Object>> handleAuthenticationException(Exception ex) {
+        RestResponse<Object> res = new RestResponse<>();
+        res.setStatusCode(HttpStatus.BAD_REQUEST.value()); // Hoặc HttpStatus.UNAUTHORIZED.value() tùy bạn muốn trả về
+                                                           // mã mấy
+        res.setMessage("Tài khoản hoặc mật khẩu không chính xác.");
+        res.setError("Bad Request");
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(res);
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<RestResponse<Object>> handleResponseStatusException(
+            ResponseStatusException ex) {
+
+        RestResponse<Object> res = new RestResponse<>();
+
+        res.setStatusCode(ex.getStatusCode().value());
+        res.setMessage(ex.getReason());
+        res.setError(HttpStatus.valueOf(ex.getStatusCode().value()).getReasonPhrase());
+
+        return ResponseEntity
+                .status(ex.getStatusCode())
+                .body(res);
     }
 
     @ExceptionHandler(value = MethodArgumentNotValidException.class)
