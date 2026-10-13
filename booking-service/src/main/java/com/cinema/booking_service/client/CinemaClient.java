@@ -23,8 +23,13 @@ public interface CinemaClient {
         void holdSeats(@RequestHeader("X-User-Email") String userEmail,
                         @RequestBody ReqHoldSeatDTO request);
 
-        @GetMapping("/api/v1/seats/room/{roomId}")
-        RestResponse<List<ResSeatDTO>> getSeatsByRoomId(@PathVariable("roomId") Long roomId);
+        @GetMapping("/api/v1/rooms/{roomId}/seats")
+        RestResponse<List<ResSeatDTO>> getSeatsByRoomId(
+                        @PathVariable("roomId") Long roomId);
+
+        // @GetMapping("/api/v1/seats/room/{roomId}")
+        // RestResponse<List<ResSeatDTO>> getSeatsByRoomId(@PathVariable("roomId") Long
+        // roomId);
 
         @GetMapping("/api/v1/seats/lock/holder")
         RestResponse<ResSeatLockDetailDTO> getSeatHolder(

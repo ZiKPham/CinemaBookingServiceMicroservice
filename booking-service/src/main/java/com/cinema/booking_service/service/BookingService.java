@@ -11,6 +11,7 @@ import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import com.cinema.booking_service.client.CinemaClient;
@@ -18,6 +19,7 @@ import com.cinema.booking_service.client.ShowtimeClient;
 import com.cinema.booking_service.client.UserClient;
 import com.cinema.booking_service.domain.Booking;
 import com.cinema.booking_service.domain.Ticket;
+import com.cinema.booking_service.domain.dto.BookingEventDTO;
 import com.cinema.booking_service.domain.request.BookingSearchCriteria;
 import com.cinema.booking_service.domain.request.ReqBookingDTO;
 import com.cinema.booking_service.domain.request.ReqHoldSeatDTO;
@@ -35,8 +37,12 @@ import com.cinema.booking_service.util.error.IdInvalidException;
 
 import jakarta.persistence.criteria.Predicate;
 import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
+@RequiredArgsConstructor
+@Slf4j
 public class BookingService {
 
     private final BookingRepository bookingRepository;
@@ -45,13 +51,12 @@ public class BookingService {
     private final UserClient userClient;
     private final ShowtimeClient showtimeClient;
 
-    public BookingService(BookingRepository bookingRepository, TicketRepository ticketRepository,
-            CinemaClient cinemaClient, UserClient userClient, ShowtimeClient showtimeClient) {
-        this.bookingRepository = bookingRepository;
-        this.ticketRepository = ticketRepository;
-        this.cinemaClient = cinemaClient;
-        this.userClient = userClient;
-        this.showtimeClient = showtimeClient;
+    private final KafkaTemplate<String, BookingEventDTO> kafkaTemplate;
+    private static final String TOPIC = "booking-events-v1";
+
+    public void sendBookingEvent(BookingEventDTO event) {
+        log.info("🚀 [KAFKA PRODUCER] Đang gửi event cho bookingId: {}", event.getBookingId());
+        kafkaTemplate.send(TOPIC, event.getBookingId(), event);
     }
 
     @Transactional
@@ -181,6 +186,28 @@ public class BookingService {
                 System.err
                         .println("Không thể unlock ghế " + seatId + " trên Redis cho showtime " + req.getShowtimeId());
             }
+        }
+
+        try {
+            // Lấy trực tiếp tên phim từ biến showtimeInfo đã gọi ở bước đầu hàm
+            String movieTitle = null;
+            if (showtimeInfo != null && showtimeInfo.getMovie() != null) {
+                movieTitle = showtimeInfo.getMovie().getName();
+            }
+
+            String seatListStr = req.getSeatIds().toString(); // Danh sách ID ghế
+
+            BookingEventDTO bookingEvent = new BookingEventDTO(
+                    String.valueOf(savedBooking.getId()),
+                    savedBooking.getUserEmail(),
+                    movieTitle,
+                    seatListStr,
+                    savedBooking.getTotalPrice());
+
+            // Gửi message sang Kafka bất đồng bộ
+            sendBookingEvent(bookingEvent);
+        } catch (Exception e) {
+            log.error("Lỗi khi gửi sự kiện booking sang Kafka: {}", e.getMessage());
         }
 
         return convertToResBookingDTO(savedBooking);
@@ -315,49 +342,103 @@ public class BookingService {
         res.setPaymentMethod(booking.getPaymentMethod());
         res.setCreatedAt(booking.getCreatedAt());
 
-        // Lấy thông tin User thông qua OpenFeign từ user-service
+        // 1. Lấy thông tin User
         ResBookingDTO.UserSummary userSummary = new ResBookingDTO.UserSummary();
-        userSummary.setEmail((booking.getUserEmail()));
+
+        userSummary.setEmail(booking.getUserEmail());
+
         try {
-            ResUserDTO userInfo = userClient.getUserByEmail(booking.getUserEmail());
-            if (userInfo != null) {
-                userSummary.setEmail(userInfo.getEmail());
+            RestResponse<ResUserDTO> response = userClient.getUserByEmail(booking.getUserEmail());
+
+            if (response != null && response.getData() != null) {
+                ResUserDTO userDTO = response.getData();
+
+                userSummary.setId(userDTO.getId());
+                userSummary.setEmail(userDTO.getEmail());
+                userSummary.setFullName(userDTO.getFullName());
             }
         } catch (Exception e) {
-            System.err.println("Không thể lấy user info cho userId: " + booking.getUserEmail());
+            log.error("Không thể lấy thông tin user, email={}",
+                    booking.getUserEmail(), e);
         }
+
         res.setUser(userSummary);
 
+        // 2. Lấy thông tin suất chiếu và phòng
+        ResShowtimeDTO showtimeInfo = null;
+
         ResBookingDTO.ShowtimeSummary showtimeSummary = new ResBookingDTO.ShowtimeSummary();
+
         showtimeSummary.setId(booking.getShowtimeId());
+
         try {
             RestResponse<ResShowtimeDTO> response = showtimeClient.getShowtimeById(booking.getShowtimeId());
-            if (response != null && response.getData() != null) {
-                ResShowtimeDTO showtimeInfo = response.getData();
-                if (showtimeInfo.getMovie() != null) {
-                    showtimeSummary.setMovieTitle(showtimeInfo.getMovie().getName());
-                }
-                if (showtimeInfo.getRoom() != null) {
-                    showtimeSummary.setRoomName(showtimeInfo.getRoom().getName());
-                }
-            }
 
+            if (response != null && response.getData() != null) {
+                showtimeInfo = response.getData();
+
+                if (showtimeInfo.getMovie() != null) {
+                    showtimeSummary.setMovieTitle(
+                            showtimeInfo.getMovie().getName());
+                }
+
+                if (showtimeInfo.getRoom() != null) {
+                    showtimeSummary.setRoomName(
+                            showtimeInfo.getRoom().getName());
+                }
+
+                showtimeSummary.setStartTime(showtimeInfo.getStartTime());
+            }
         } catch (Exception e) {
-            System.err.println("Không thể lấy showtime info cho showtimeId: " + booking.getShowtimeId());
+            log.error("Không thể lấy thông tin showtime, showtimeId={}",
+                    booking.getShowtimeId(), e);
         }
+
         res.setShowtime(showtimeSummary);
 
-        List<ResBookingDTO.TicketSummary> ticketSummaries = booking.getTickets().stream().map(t -> {
+        // 3. Lấy danh sách ghế của phòng một lần
+        List<ResSeatDTO> seatsResult = new ArrayList<>();
+
+        try {
+            if (showtimeInfo != null && showtimeInfo.getRoom() != null) {
+                Long roomId = showtimeInfo.getRoom().getId();
+
+                RestResponse<List<ResSeatDTO>> seatsResponse = cinemaClient.getSeatsByRoomId(roomId);
+
+                if (seatsResponse != null && seatsResponse.getData() != null) {
+                    seatsResult = seatsResponse.getData();
+                }
+            }
+        } catch (Exception e) {
+            log.error("Không thể lấy danh sách ghế, bookingId={}",
+                    booking.getId(), e);
+        }
+
+        // Gán sang biến final để sử dụng bên trong lambda
+        final List<ResSeatDTO> seats = seatsResult;
+
+        // 4. Ánh xạ seatId sang seatNumber
+        List<ResBookingDTO.TicketSummary> ticketSummaries = booking.getTickets().stream().map(ticket -> {
             ResBookingDTO.TicketSummary ts = new ResBookingDTO.TicketSummary();
-            ts.setId(t.getId());
-            ts.setSeatId(t.getSeatId());
-            ts.setPrice(t.getPrice());
-            ts.setTicketCode(t.getTicketCode());
-            ts.setQrCode(t.getTicketCode()); // Gán mã QR chính là mã vé hoặc chuỗi định danh riêng
+
+            ts.setId(ticket.getId());
+            ts.setSeatId(ticket.getSeatId());
+            ts.setPrice(ticket.getPrice());
+            ts.setTicketCode(ticket.getTicketCode());
+            ts.setQrCode(ticket.getTicketCode());
+
+            seats.stream()
+                    .filter(seat -> java.util.Objects.equals(
+                            seat.getId(), ticket.getSeatId()))
+                    .findFirst()
+                    .ifPresent(seat -> ts.setSeatNumber(seat.getSeatNumber()));
+
             return ts;
         }).toList();
 
         res.setTickets(ticketSummaries);
+
         return res;
     }
+
 }

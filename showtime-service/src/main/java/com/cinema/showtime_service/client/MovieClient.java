@@ -1,6 +1,8 @@
 package com.cinema.showtime_service.client;
 
 import com.cinema.showtime_service.domain.response.ResMovieDTO;
+import com.cinema.showtime_service.domain.response.RestResponse;
+
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -10,5 +12,5 @@ import org.springframework.web.bind.annotation.PathVariable;
 public interface MovieClient {
 
     @GetMapping("/api/v1/movies/{id}")
-    ResMovieDTO getMovieById(@PathVariable("id") long id);
+    RestResponse<ResMovieDTO> getMovieById(@PathVariable("id") long id);
 }

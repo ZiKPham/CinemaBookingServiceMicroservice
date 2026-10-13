@@ -32,8 +32,10 @@ import com.cinema.showtime_service.repository.ShowtimeRepository;
 import com.cinema.showtime_service.util.error.IdInvalidException;
 
 import jakarta.persistence.criteria.Predicate;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
+@Slf4j
 public class ShowtimeService {
 
     private final ShowtimeRepository showtimeRepository;
@@ -55,7 +57,7 @@ public class ShowtimeService {
     @CacheEvict(value = "showtimes", allEntries = true)
     public ResShowtimeDTO handleCreateShowtime(ReqCreateShowtimeDTO reqDTO) throws IdInvalidException {
         try {
-            ResMovieDTO movieInfo = movieClient.getMovieById(reqDTO.getMovieId());
+            RestResponse<ResMovieDTO> movieInfo = movieClient.getMovieById(reqDTO.getMovieId());
             if (movieInfo == null) {
                 throw new IdInvalidException("Movie với id = " + reqDTO.getMovieId() + " không tồn tại");
             }
@@ -65,7 +67,7 @@ public class ShowtimeService {
         }
 
         try {
-            ResRoomDTO roomInfo = cinemaClient.getRoomById(reqDTO.getRoomId());
+            RestResponse<ResRoomDTO> roomInfo = cinemaClient.getRoomById(reqDTO.getRoomId());
             if (roomInfo == null) {
                 throw new IdInvalidException("Room với id = " + reqDTO.getRoomId() + " không tồn tại");
             }
@@ -285,11 +287,12 @@ public class ShowtimeService {
 
         // 1. Lấy thông tin Movie qua Feign Client để điền tên phim
         try {
-            ResMovieDTO movieInfo = movieClient.getMovieById(showtime.getMovieId());
-            if (movieInfo != null) {
+            RestResponse<ResMovieDTO> movieInfo = movieClient.getMovieById(showtime.getMovieId());
+            if (movieInfo != null && movieInfo.getData() != null) {
+                ResMovieDTO movieDTO = movieInfo.getData();
                 ResShowtimeDTO.MovieShowtime m = new ResShowtimeDTO.MovieShowtime();
-                m.setId(showtime.getMovieId());
-                m.setName(movieInfo.getName()); // Bổ sung tên phim
+                m.setId(movieDTO.getId());
+                m.setName(movieDTO.getName()); // Bổ sung tên phim
                 res.setMovie(m);
             }
         } catch (Exception e) {
@@ -301,15 +304,24 @@ public class ShowtimeService {
 
         // 2. Lấy thông tin Room và Cinema qua Feign Client để điền tên phòng, tên rạp
         try {
-            ResRoomDTO roomInfo = cinemaClient.getRoomById(showtime.getRoomId());
-            if (roomInfo != null) {
-                ResShowtimeDTO.RoomShowtime r = new ResShowtimeDTO.RoomShowtime();
-                r.setId(showtime.getRoomId());
-                r.setName(roomInfo.getName()); // Bổ sung tên phòng
+            RestResponse<ResRoomDTO> response = cinemaClient.getRoomById(showtime.getRoomId());
+
+            log.info("Room response from cinema-service: {}", response);
+
+            if (response != null && response.getData() != null) {
+                ResRoomDTO roomInfo = response.getData();
+
+                ResShowtimeDTO.RoomShowtime room = new ResShowtimeDTO.RoomShowtime();
+
+                room.setId(roomInfo.getId());
+                room.setName(roomInfo.getName());
+
                 if (roomInfo.getCinema() != null) {
-                    r.setCinemaName(roomInfo.getCinema().getName()); // Bổ sung tên rạp
+                    room.setCinemaName(roomInfo.getCinema().getName());
                 }
-                res.setRoom(r);
+
+                res.setRoom(room);
+            } else {
             }
         } catch (Exception e) {
             // Fallback nếu cinema-service bận

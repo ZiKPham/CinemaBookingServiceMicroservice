@@ -20,6 +20,6 @@ public interface CinemaClient {
             @RequestParam(value = "showtimeId", required = false) Long showtimeId);
 
     @GetMapping("/api/v1/rooms/{id}")
-    ResRoomDTO getRoomById(@PathVariable("id") long id);
+    RestResponse<ResRoomDTO> getRoomById(@PathVariable("id") long id);
 
 }
