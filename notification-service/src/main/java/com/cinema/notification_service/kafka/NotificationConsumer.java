@@ -1,4 +1,4 @@
-package com.cinema.notification_service.consumer;
+package com.cinema.notification_service.kafka;
 
 import com.cinema.notification_service.service.EmailService;
 import com.cinema.notification_service.service.IdempotentConsumerService;

@@ -9,6 +9,8 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
     ports:
       - "2181:2181"
+    networks:
+      - microservices-net
 
   kafka1:
     image: confluentinc/cp-kafka:7.5.0
@@ -24,6 +26,8 @@ services:
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 2
+    networks:
+      - microservices-net
 
   kafka2:
     image: confluentinc/cp-kafka:7.5.0
@@ -39,16 +43,20 @@ services:
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 2
+    networks:
+      - microservices-net
 
-  #0. Redis
+  # 0. Redis Cache
   redis:
     image: redis:alpine
     container_name: cinema-redis
     ports:
       - "6379:6379"
     restart: always
+    networks:
+      - microservices-net
 
-  # 1. Database với Healthcheck
+  # 1. Database MySQL với Healthcheck
   mysql-db:
     image: mysql:8.0
     container_name: mysql-db
@@ -114,8 +122,13 @@ services:
         condition: service_healthy
       discovery-server:
         condition: service_started
+      kafka1:
+        condition: service_started
+      kafka2:
+        condition: service_started
     environment:
       - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka1:29092,kafka2:29092
     networks:
       - microservices-net
 
@@ -182,25 +195,59 @@ services:
         condition: service_healthy
       discovery-server:
         condition: service_started
+      kafka1:
+        condition: service_started
+      kafka2:
+        condition: service_started
     environment:
       - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka1:29092,kafka2:29092
     networks:
       - microservices-net
 
-  # 9. API Gateway
+  # 9. Notification Service
+  notification-service:
+    build: ./notification-service
+    container_name: notification-service
+    hostname: notification-service
+    ports:
+      - "8087:8087"
+    depends_on:
+      discovery-server:
+        condition: service_started
+      kafka1:
+        condition: service_started
+      kafka2:
+        condition: service_started
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka1:29092,kafka2:29092
+    networks:
+      - microservices-net
+
+  # 10. API Gateway
   api-gateway:
     build: ./api-gateway
     container_name: api-gateway
     ports:
       - "8080:8080"
     depends_on:
-      - discovery-server
-      - user-service
-      - booking-service
-      - cinema-service
-      - movie-service
-      - showtime-service
-      - pay-service
+      discovery-server:
+        condition: service_started
+      user-service:
+        condition: service_started
+      booking-service:
+        condition: service_started
+      cinema-service:
+        condition: service_started
+      movie-service:
+        condition: service_started
+      showtime-service:
+        condition: service_started
+      pay-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
     environment:
       - SPRING_PROFILES_ACTIVE=docker
     networks:

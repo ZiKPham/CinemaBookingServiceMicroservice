@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.cinema.pay_service.client.BookingClient;
 import com.cinema.pay_service.config.VNPayConfig;
 import com.cinema.pay_service.domain.Payment;
+import com.cinema.pay_service.domain.dto.PaymentEventDTO;
 import com.cinema.pay_service.domain.response.ResBookingDTO;
 import com.cinema.pay_service.domain.response.RestResponse;
 import com.cinema.pay_service.repository.PaymentRepository;
@@ -27,8 +28,10 @@ import com.cinema.pay_service.util.constant.PaymentStatus;
 import com.cinema.pay_service.util.error.IdInvalidException;
 
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.RequiredArgsConstructor;
 
 @Service
+@RequiredArgsConstructor
 public class PaymentService {
 
     private final VNPayConfig vnPayConfig;
@@ -37,20 +40,7 @@ public class PaymentService {
     private final QRCodeService qrCodeService;
     private final BookingClient bookingClient;
     private final PaymentRateLimiterService rateLimiterService;
-
-    public PaymentService(VNPayConfig vnPayConfig,
-            PaymentRepository paymentRepository,
-            EmailService emailService,
-            QRCodeService qrCodeService,
-            BookingClient bookingClient,
-            PaymentRateLimiterService rateLimiterService) {
-        this.vnPayConfig = vnPayConfig;
-        this.paymentRepository = paymentRepository;
-        this.emailService = emailService;
-        this.qrCodeService = qrCodeService;
-        this.bookingClient = bookingClient;
-        this.rateLimiterService = rateLimiterService;
-    }
+    private final PaymentKafkaProducer paymentKafkaProducer;
 
     /**
      * Tạo URL thanh toán VNPay Sandbox và lưu bản ghi Payment trạng thái PENDING
@@ -168,43 +158,29 @@ public class PaymentService {
             return payment.getStatus() == PaymentStatus.SUCCESS;
         }
 
+        PaymentEventDTO eventDTO = PaymentEventDTO.builder()
+                .paymentId(payment.getId())
+                .bookingId(payment.getBookingId())
+                .userEmail(payment.getUserEmail())
+                .amount(payment.getAmount())
+                .paymentMethod(payment.getPaymentMethod())
+                .transactionCode(payment.getTransactionCode())
+                .createdAt(payment.getCreatedAt())
+                .build();
+
         if ("00".equals(vnp_ResponseCode)) {
             payment.setStatus(PaymentStatus.SUCCESS);
             this.paymentRepository.save(payment);
 
-            // --- LOGIC GỬI EMAIL & MÃ QR SAU KHI THANH TOÁN THÀNH CÔNG ---
-            try {
-                bookingClient.updateBookingStatus(payment.getBookingId(), "PAID");
-            } catch (Exception e) {
-                System.err.println("Không thể cập nhật trạng thái booking sang PAID: " + e.getMessage());
-            }
-
-            try {
-                byte[] qrCode = qrCodeService.generateQRCodeImage("BOOKING_" + payment.getBookingId(), 250, 250);
-
-                String emailContent = "<h3>Cảm ơn bạn đã đặt vé tại Cinema!</h3>"
-                        + "<p>Mã đơn hàng: <b>" + payment.getBookingId() + "</b></p>"
-                        + "<p>Mã giao dịch: <b>" + payment.getTransactionCode() + "</b></p>"
-                        + "<p>Tổng tiền: <b>" + payment.getAmount() + " VND</b></p>"
-                        + "<p>Vui lòng xuất trình mã QR đính kèm khi đến rạp.</p>";
-
-                // Lưu ý: Nếu bạn có user email riêng hoặc truyền qua thông tin, ở đây dùng tạm
-                // thông tin giao dịch
-                // emailService.sendBookingConfirmationEmail(...);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-
+            eventDTO.setStatus(PaymentStatus.SUCCESS);
+            paymentKafkaProducer.sendPaymentEvent(eventDTO);
             return true;
         } else {
             payment.setStatus(PaymentStatus.FAILED);
             this.paymentRepository.save(payment);
 
-            try {
-                bookingClient.updateBookingStatus(payment.getBookingId(), "CANCELLED");
-            } catch (Exception e) {
-                System.err.println("Không thể cập nhật trạng thái booking sang CANCELLED: " + e.getMessage());
-            }
+            eventDTO.setStatus(PaymentStatus.FAILED);
+            paymentKafkaProducer.sendPaymentEvent(eventDTO);
             return false;
         }
     }

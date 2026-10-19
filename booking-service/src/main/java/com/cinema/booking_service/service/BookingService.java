@@ -381,7 +381,6 @@ public class BookingService {
                     showtimeSummary.setMovieTitle(
                             showtimeInfo.getMovie().getName());
                 }
-
                 if (showtimeInfo.getRoom() != null) {
                     showtimeSummary.setRoomName(
                             showtimeInfo.getRoom().getName());

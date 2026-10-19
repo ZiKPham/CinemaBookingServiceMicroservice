@@ -5,23 +5,59 @@ import java.util.Map;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import com.cinema.pay_service.client.BookingClient;
+import com.cinema.pay_service.domain.response.ResBookingDTO;
+import com.cinema.pay_service.domain.response.RestResponse;
 import com.cinema.pay_service.service.MoMoPaymentService;
 import com.cinema.pay_service.service.PaymentService;
+import com.cinema.pay_service.util.constant.PaymentMethod;
 import com.cinema.pay_service.util.error.IdInvalidException;
 
 import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/v1/payments")
+@RequiredArgsConstructor
 public class PaymentController {
 
     private final PaymentService paymentService;
     private final MoMoPaymentService momoPaymentService; // 1. Khai báo service MoMo
+    private final BookingClient bookingClient;
 
-    public PaymentController(PaymentService paymentService, MoMoPaymentService momoPaymentService) {
-        this.paymentService = paymentService;
-        this.momoPaymentService = momoPaymentService; // 2. Inject qua constructor
+    @PostMapping("/create/{bookingId}")
+    public ResponseEntity<String> createPayment(
+            @PathVariable("bookingId") Long bookingId,
+            @Parameter(hidden = true) @RequestHeader(value = "X-User-Email", required = false) String userEmail,
+            HttpServletRequest request) throws IdInvalidException {
+
+        // 1. Gọi sang booking-service để lấy thông tin đơn hàng
+        RestResponse<ResBookingDTO> response = bookingClient.getBookingById(bookingId, userEmail);
+        if (response == null || response.getData() == null) {
+            throw new IdInvalidException("Không tìm thấy thông tin đơn hàng với ID: " + bookingId);
+        }
+
+        ResBookingDTO bookingInfo = response.getData();
+
+        // 2. Lấy phương thức thanh toán từ booking và chuyển đổi sang Enum an toàn
+        if (bookingInfo.getPaymentMethod() == null) {
+            throw new IdInvalidException("Đơn hàng chưa xác định phương thức thanh toán!");
+        }
+
+        PaymentMethod method = PaymentMethod.valueOf(bookingInfo.getPaymentMethod().toUpperCase());
+
+        // 3. Phân nhánh điều kiện chính xác: Chọn cổng nào gọi đúng cổng đó
+        String payUrl;
+        if (PaymentMethod.VNPAY.equals(method)) {
+            payUrl = this.paymentService.createVNPayPayment(bookingId, userEmail, request);
+        } else if (PaymentMethod.MOMO.equals(method)) {
+            payUrl = this.momoPaymentService.createMoMoPayment(bookingId, userEmail);
+        } else {
+            return ResponseEntity.badRequest().body("Phương thức thanh toán không được hỗ trợ: " + method);
+        }
+
+        return ResponseEntity.ok(payUrl);
     }
 
     @GetMapping("/vn-pay")
